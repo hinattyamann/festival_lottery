@@ -2,6 +2,21 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+// Mock Server
+if (
+  process.env.NODE_ENV === "development" &&
+  process.env.NEXT_PUBLIC_USE_MOCKS === "true"
+) {
+  if (typeof window === "undefined") {
+    const { server } = require("../mocks/server");
+    server.listen();
+  } else {
+    const { worker } = require("../mocks/browser");
+    worker.start();
+  }
+}
+
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],

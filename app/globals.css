@@ -24,3 +24,64 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes confettiFloat {
+  0%   { transform: translateY(0)    rotate(0deg);    opacity: .85; }
+  50%  { transform: translateY(-18px) rotate(8deg);   opacity: .95; }
+  100% { transform: translateY(0)    rotate(0deg);    opacity: .85; }
+}
+/* --- 文化祭：紙吹雪（丸紙＆三角） --- */
+.paper-dot, .paper-tri{
+  position:absolute;
+  width:12px;height:12px;
+  animation: confettiFloat linear infinite;
+  box-shadow: 0 0 0 0 rgba(0,0,0,.06), 0 0 0 0 rgba(0,0,0,.06) inset;
+}
+.paper-dot{ border-radius:9999px; }
+.paper-tri{
+  width: 0; height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 12px solid #F9A8D4;
+  transform-origin: 50% 50%;
+}
+/* パステル配色ローテーション */
+.paper-dot:nth-child(6n+1){ background:#F9A8D4; } /* pink-300 */
+.paper-dot:nth-child(6n+2){ background:#93C5FD; } /* blue-300 */
+.paper-dot:nth-child(6n+3){ background:#A7F3D0; } /* emerald-200 */
+.paper-dot:nth-child(6n+4){ background:#FDE68A; } /* yellow-300 */
+.paper-dot:nth-child(6n+5){ background:#C4B5FD; } /* violet-300 */
+.paper-dot:nth-child(6n){   background:#FBCFE8; } /* pink-200 */
+.paper-tri:nth-child(6n+1){ border-top-color:#93C5FD; }
+.paper-tri:nth-child(6n+2){ border-top-color:#A7F3D0; }
+.paper-tri:nth-child(6n+3){ border-top-color:#FDE68A; }
+.paper-tri:nth-child(6n+4){ border-top-color:#C4B5FD; }
+.paper-tri:nth-child(6n+5){ border-top-color:#BFDBFE; }
+.paper-tri:nth-child(6n){   border-top-color:#FBCFE8; }
+
+/* ---- Lantern premium ---- */
+@keyframes lanternSway {
+  0%   { transform: rotate(-3deg); }
+  50%  { transform: rotate( 3deg); }
+  100% { transform: rotate(-3deg); }
+}
+.lantern-sway {
+  animation: lanternSway 3.8s ease-in-out infinite;
+  filter: drop-shadow(0 4px 10px rgba(0,0,0,.25));
+}
+
+/* ---- Paper flags & balloons ---- */
+@keyframes flagWave {
+  0%{ transform: translateY(0) rotate(-1deg); }
+  50%{ transform: translateY(0.6px) rotate(1deg); }
+  100%{ transform: translateY(0) rotate(-1deg); }
+}
+.flag-wave { animation: flagWave 2.4s ease-in-out infinite; }
+
+@keyframes balloonFloat {
+  0%{ transform: translateY(0) }
+  50%{ transform: translateY(-1.8px) }
+  100%{ transform: translateY(0) }
+}
+.balloon-float { animation: balloonFloat 3.6s ease-in-out infinite; }
+.balloon-float-slow { animation: balloonFloat 4.6s ease-in-out infinite; }
