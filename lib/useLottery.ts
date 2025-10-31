@@ -30,6 +30,8 @@ export function useLottery(opts?: UseLotteryOptions) {
     "はずれ": 1.0,
   };
 
+  const weights_init: Weights = opts?.weights ?? defaultWeights;
+
   // ---- localStorage keys ----
   const LS_BASE_STOCK = "lottery.baseStock.v1";
   const LS_PARAMS     = "lottery.params.v1";   // { N, beta, Mcap }
@@ -60,7 +62,7 @@ export function useLottery(opts?: UseLotteryOptions) {
     if (typeof window !== "undefined") {
       try { const r = localStorage.getItem(LS_WEIGHTS); if (r) return JSON.parse(r) as Weights; } catch {}
     }
-    return opts?.weights ?? defaultWeights;
+    return weights_init;
   });
 
   // ---- Inventory state (UI-managed) ----
@@ -212,11 +214,33 @@ export function useLottery(opts?: UseLotteryOptions) {
     setLoseNames(loses);
   }, []);
 
+  // ---- 工場出荷的な既定値（UIへ渡す用） ----
+  const paramsDefaults = { N: N_init, beta: beta_init, Mcap: Mcap_init };
+  const weightsDefaults = { ...weights_init };
+
+  // （必要なら）即時に既定へ反映する関数も用意
+  const resetParamsToDefaults = useCallback(() => {
+    const next = { N: N_init, beta: beta_init, Mcap: Mcap_init };
+    setN(next.N); setBeta(next.beta); setMcap(next.Mcap);
+    saveParams(next);
+  }, [N_init, beta_init, Mcap_init, saveParams]);
+
+  const resetWeightsToDefaults = useCallback(() => {
+    const next = { ...weights_init };
+    setWeights(next);
+    saveWeights(next);
+  }, [weights_init, saveWeights]);
+
   return {
     // Config
     N, beta, Mcap,
     gainTargets, loseNames,
     weights,
+    // 既定値（“初期値に戻す”UI向け）
+    paramsDefaults,
+    weightsDefaults,
+    resetParamsToDefaults,
+    resetWeightsToDefaults,
     // 管理用 setter
     setN, setBeta, setMcap,
     setGainTargets, setLoseNames,

@@ -3,7 +3,7 @@
 //モックでサーバーにユーザIDを送り、来場数を受け取るという流れがなくとも成り立つようにする
 
 "use client";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import { Scanner } from "@yudiel/react-qr-scanner";
@@ -31,12 +31,15 @@ export default function UserIDInputPage() {
   const [loadingVisits, setLoadingVisits] = useState(false);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
   const [lastPrize, setLastPrize] = useState<string>("");
-  const [ animPrize, setAnimPrize] = useState<string>("");
+  const [animPrize, setAnimPrize] = useState<string>("");
   const [lastScan, setLastScan] = useState<string>("");
   const [camError, setCamError] = useState<string | null>(null);
+  const [manualMode, setManualMode] = useState(false);
+  const [manualVisits, setManualVisits] = useState<number | "">("");
   const {
     // 抽選API/表示
     N, beta, Mcap, gainTargets, loseNames, weights,
+    paramsDefaults, weightsDefaults,
     totalStock, stock,
     draw: drawOnce, getProbRows, canDraw, resetStock,
     // 管理API
@@ -48,26 +51,42 @@ export default function UserIDInputPage() {
   const [paramForm, setParamForm] = useState<{N:number; beta:number; Mcap:number}>({ N, beta, Mcap });
   const [weightForm, setWeightForm] = useState<Record<string, number>>({ ...weights });
 
+  // 現在の反映済み値をフォームに同期（未保存の編集は破棄）
+  const syncFormsFromCurrent = useCallback(() => {
+    setParamForm({ N, beta, Mcap });
+    setWeightForm({ ...weights });
+  }, [N, beta, Mcap, weights]);
+
   // 抽選演出時間(ms)
   const DRAW_DURATION = 2800;
 
   
-  const canDrawNow = useMemo(
-    () => view !== "DRAWING" && !!userID && !loadingVisits && canDraw(visits),
-    [view, userID, loadingVisits, canDraw, visits]
+  // 表示・抽選に使う来場回数（手入力中はそれを採用）
+  const visitsUsed = useMemo(
+    () => (manualMode ? Number(manualVisits || 0) : visits),
+    [manualMode, manualVisits, visits]
   );
-
-  const probRows = useMemo(() => getProbRows(visits), [getProbRows, visits]);
+  const canDrawNow = useMemo(
+    () =>
+      view !== "DRAWING" &&
+      !loadingVisits &&
+      // 手入力時は userID なしでもOK / QR時は userID 必須
+      (manualMode || !!userID) &&
+      canDraw(visitsUsed),
+    [view, loadingVisits, manualMode, userID, canDraw, visitsUsed]
+  );
+  // 確率表も抽選も「visitsUsed」をそのまま利用（=手入力でもブースト適用）
+  const probRows = useMemo(() => getProbRows(visitsUsed), [getProbRows, visitsUsed]);
 
   // 抽選器は都度在庫を受け取り、抽選後の在庫で state を更新
   const handleDraw = async () => {
     if (!canDrawNow) return;
     setView("DRAWING");
-    const prize = drawOnce(visits);
+    const prize = drawOnce(visitsUsed);
     setAnimPrize(prize);
     // 抽選を来訪履歴に記録（次回は lottery 以降でカウント）
     try {
-      if (userID) {
+      if (userID && !manualMode) {
         await postEntryAttractionVisit(userID as UserId, "prize", "prize_system");
       }
     } catch (e) {
@@ -88,6 +107,8 @@ export default function UserIDInputPage() {
     setVisits(0);
     setFetchErr(null);
     setLoadingVisits(false);
+    setManualMode(false);
+    setManualVisits("");
   }
 
   // QR scan handlers
@@ -115,6 +136,7 @@ export default function UserIDInputPage() {
   // userID を取得したら履歴→入場数を計算
   useEffect(() => {
     const run = async () => {
+      if (manualMode) return;
       if (!userID) return;
       setLoadingVisits(true);
       setFetchErr(null);
@@ -220,7 +242,7 @@ export default function UserIDInputPage() {
       }
     };
     run();
-  }, [userID]);
+  }, [userID, manualMode]);
 
   // 結果表示時の紙吹雪（当たりランクに応じて強弱）
   useEffect(() => {
@@ -421,7 +443,7 @@ export default function UserIDInputPage() {
             <button
               type="button"
               className="px-3 py-1 rounded border"
-              onClick={() => setView("WAITING")}
+              onClick={() => { syncFormsFromCurrent(); setView("WAITING"); }}
             >
               抽選待機に戻る
             </button>
@@ -504,6 +526,11 @@ export default function UserIDInputPage() {
                 <button type="button" className="px-3 py-1 rounded border"
                   onClick={()=>setParamForm({ N, beta, Mcap })}
                 >現在値で戻す</button>
+                <button
+                  type="button"
+                  className="px-3 py-1 rounded border"
+                  onClick={() => setParamForm({ ...paramsDefaults })}
+                >初期値に戻す</button>
               </div>
             </div>
 
@@ -536,6 +563,11 @@ export default function UserIDInputPage() {
                 <button type="button" className="px-3 py-1 rounded border"
                   onClick={()=>setWeightForm({ ...weights })}
                 >現在値で戻す</button>
+                <button
+                  type="button"
+                  className="px-3 py-1 rounded border"
+                  onClick={() => setWeightForm({ ...weightsDefaults })}
+                >初期値に戻す</button>
               </div>
             </div>
           </div>
@@ -548,7 +580,7 @@ export default function UserIDInputPage() {
           <button
             type="button"
             aria-label="管理メニュー"
-            onClick={() => setView("ADMIN")}
+            onClick={() => { syncFormsFromCurrent(); setView("ADMIN"); }}
             className="absolute right-3 top-3 inline-flex items-center justify-center w-9 h-9 rounded-full border bg-gray-50 hover:bg-gray-100"
             title="在庫追加・パラメータ編集"
           >
@@ -566,7 +598,7 @@ export default function UserIDInputPage() {
             <div><span className="font-semibold">User ID:</span> {userID || "—"}</div>
             <div>
               <span className="font-semibold">来場回数:</span>{" "}
-              {loadingVisits ? "取得中…" : visits}
+              {manualMode ? (manualVisits === "" ? 0 : Number(manualVisits)) : (loadingVisits ? "取得中…" : visits)}
             </div>
             {fetchErr && <p className="text-xs text-red-600">{fetchErr}</p>}
             {/* {!userID && (
@@ -640,28 +672,56 @@ export default function UserIDInputPage() {
                 </tbody>
               </table>
               <div className="w-full md:flex-1">
-                <div className="text-sm font-medium mb-1">QRスキャン</div>
-                <div className="aspect-video w-full rounded-lg overflow-hidden border border-gray-300/80 scale-x-[-1]">
-              <Scanner
-                onScan={handleScan}
-                onError={handleScannerError}
-                constraints={{ facingMode: { ideal: "environment" } }}
-                // 必要ならQR専用に
-                // formats={["qr_code"]}
-                components={{ finder: true }}
-                classNames={{
-                  container: "w-full h-full",
-                  video: "w-full h-full object-cover",
-                }}
-              />
-                </div>
-                {camError ? (
-                  <p className="mt-2 text-xs text-red-600">{camError}</p>
+                <div className="text-sm font-medium mb-1">QRスキャン / 手入力</div>
+                {!manualMode ? (
+                  <>
+                    <div className="aspect-video w-full rounded-lg overflow-hidden border border-gray-300/80 scale-x-[-1]">
+                      <Scanner
+                        onScan={handleScan}
+                        onError={handleScannerError}
+                        constraints={{ facingMode: { ideal: "environment" } }}
+                        components={{ finder: true }}
+                        classNames={{ container: "w-full h-full", video: "w-full h-full object-cover" }}
+                      />
+                    </div>
+                    {camError ? (
+                      <p className="mt-2 text-xs text-red-600">{camError}</p>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-500 break-all">
+                        最終検出: {lastScan ? <code>{lastScan}</code> : "—"}
+                      </p>
+                    )}
+                  </>
                 ) : (
-                  <p className="mt-2 text-xs text-gray-500 break-all">
-                    最終検出: {lastScan ? <code>{lastScan}</code> : "—"}
-                  </p>
+                  <div className="rounded-lg border p-3 bg-gray-50/60">
+                    <div className="text-sm mb-2 font-medium">手入力（QRなし来場）</div>
+                    <label className="flex flex-col">
+                      <span className="text-xs text-gray-600">来場回数</span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        className="rounded border px-2 py-1"
+                        value={manualVisits}
+                        onChange={(e)=>setManualVisits(e.target.value === "" ? "" : Number(e.target.value))}
+                      />
+                    </label>
+                    <p className="mt-2 text-[11px] text-gray-500">
+                      ※ 手入力中はサーバから履歴を取得しません。入力した来場回数に応じてブーストが適用されます。
+                    </p>
+                  </div>
                 )}
+                <div className="mt-3 flex items-center gap-3">
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={manualMode}
+                      onChange={(e)=>setManualMode(e.target.checked)}
+                    />
+                    手入力モードにする
+                  </label>
+                </div>
               </div>
             </div>
             <button
@@ -676,12 +736,14 @@ export default function UserIDInputPage() {
             >
               {totalStock <= 0
                 ? "在庫がありません"
+                : manualMode
+                ? (visitsUsed < N ? `抽選はできません（あと ${N - visitsUsed} 回）` : "抽選する")
                 : !userID
                 ? "QRを読み取ってください"
                 : loadingVisits
                 ? "来場回数を取得中…"
-                : visits < N
-                ? `抽選はできません（あと ${N - visits} 回）`
+                : visitsUsed < N
+                ? `抽選はできません（あと ${N - visitsUsed} 回）`
                 : "抽選する"}
             </button>
 
@@ -702,7 +764,7 @@ export default function UserIDInputPage() {
                 在庫・抽選履歴をリセット
               </button>
             </div>
-            {userID && !loadingVisits && visits < N && (
+            {(manualMode ? (visitsUsed < N) : (userID && !loadingVisits && visitsUsed < N)) && (
               <p className="mt-2 text-xs text-red-600 text-center">
                 ※ 抽選は体験回数が{N}回以上で可能です。
               </p>
